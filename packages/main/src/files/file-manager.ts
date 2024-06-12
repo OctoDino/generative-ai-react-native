@@ -16,7 +16,6 @@
  */
 
 import { RequestOptions } from "../../types";
-import { readFileSync } from "fs";
 import { FilesRequestUrl, getHeaders, makeFilesRequest } from "./request";
 import {
   FileMetadata,
@@ -54,7 +53,18 @@ export class GoogleAIFileManager {
     filePath: string,
     fileMetadata: FileMetadata,
   ): Promise<UploadFileResponse> {
-    const file = readFileSync(filePath);
+    const file = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.onload = function() {
+              resolve(xhr.response); // when BlobModule finishes reading, resolve with the blob
+           };
+           xhr.onerror = function() {
+             reject(new TypeError('Network request failed')); // error occurred, rejecting
+           };
+           xhr.responseType = 'blob'; // use BlobModule's UriHandler
+           xhr.open('GET', fileUri, true); // fetch the blob from uri in async mode
+           xhr.send(null); // no initial data
+         });
     const url = new FilesRequestUrl(
       FilesTask.UPLOAD,
       this.apiKey,
