@@ -16,7 +16,6 @@
  */
 
 import { RequestOptions } from "../../types";
-import { readFileSync } from "fs";
 import { FilesRequestUrl, getHeaders, makeFilesRequest } from "./request";
 import {
   FileMetadata,
@@ -48,49 +47,56 @@ export class GoogleAIFileManager {
   ) {}
 
   /**
-   * Upload a file
-   */
-  async uploadFile(
-    filePath: string,
-    fileMetadata: FileMetadata,
-  ): Promise<UploadFileResponse> {
-    const file = readFileSync(filePath);
-    const url = new FilesRequestUrl(
-      FilesTask.UPLOAD,
-      this.apiKey,
-      this._requestOptions,
-    );
+     * Upload a file to GoogleAI
+     * @param {string} fileUri - The URI of the file to upload
+     * @param {object} fileMetadata - Metadata for the file being uploaded
+     * @param {string} fileMetadata.displayName - The name of the file being uploaded
+     * @param {string} fileMetadata.mimeType - The MIME type of the file being uploaded
+     * @returns {Promise<object>} - A promise that resolves to the response from the server
+     */
+    async uploadFile(fileUri, fileMetadata) {
+        // Create a new FormData object and append the file to it
+        let file = new FormData();
+        file.append('video', {
+            uri: fileUri,
+            name: fileMetadata.displayName,
+            filename: fileMetadata.displayName,
+            type: fileMetadata.mimeType
+        });
+        file.append('Content-Type', 'image/png');
 
-    const uploadHeaders = getHeaders(url);
-    const boundary = generateBoundary();
-    uploadHeaders.append("X-Goog-Upload-Protocol", "multipart");
-    uploadHeaders.append(
-      "Content-Type",
-      `multipart/related; boundary=${boundary}`,
-    );
+        // Create a new FilesRequestUrl object and get the headers for the upload
+        const url = new FilesRequestUrl(FilesTask.UPLOAD, this.apiKey, this._requestOptions);
+        const uploadHeaders = getHeaders(url);
 
-    const uploadMetadata = getUploadMetadata(fileMetadata);
+        // Generate a boundary for the multipart form data and set the appropriate headers
+        const boundary = generateBoundary();
+        uploadHeaders.append("X-Goog-Upload-Protocol", "multipart");
+        uploadHeaders.append("Content-Type", `multipart/related; boundary=${boundary}`);
 
-    // Multipart formatting code taken from @firebase/storage
-    const metadataString = JSON.stringify({ file: uploadMetadata });
-    const preBlobPart =
-      "--" +
-      boundary +
-      "\r\n" +
-      "Content-Type: application/json; charset=utf-8\r\n\r\n" +
-      metadataString +
-      "\r\n--" +
-      boundary +
-      "\r\n" +
-      "Content-Type: " +
-      fileMetadata.mimeType +
-      "\r\n\r\n";
-    const postBlobPart = "\r\n--" + boundary + "--";
-    const blob = new Blob([preBlobPart, file, postBlobPart]);
+        // Create the metadata string for the upload and format it into a multipart message
+        const uploadMetadata = getUploadMetadata(fileMetadata);
+        const metadataString = JSON.stringify({ file: uploadMetadata });
+        const preBlobPart = "--" +
+            boundary +
+            "\r\n" +
+            "Content-Type: application/json; charset=utf-8\r\n\r\n" +
+            metadataString +
+            "\r\n--" +
+            boundary +
+            "\r\n" +
+            "Content-Type: " +
+            fileMetadata.mimeType +
+            "\r\n\r\n";
+        const postBlobPart = "\r\n--" + boundary + "--";
 
-    const response = await makeFilesRequest(url, uploadHeaders, blob);
-    return response.json();
-  }
+        // Create a new Blob object from the multipart message and the file
+        const blob = new Blob([preBlobPart, file, postBlobPart]);
+
+        // Make the request to upload the file and return the response
+        const response = await makeFilesRequest(url, uploadHeaders, blob);
+        return response.json();
+    }
 
   /**
    * List all uploaded files
